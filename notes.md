@@ -1,10 +1,19 @@
 # Notes
 
-## MoE
+What have I been reading up until now? 2024-04-01
+1. [Outrageously Large Neural Networks](#outrageously-large-neural-networks)
+2. [Switch Transformers](#switch-transformers)
+3. [ST-MoE](#st-moe)
+4. [Empirical understanding of MoE](#towards-an-empirical-understanding-of-moe)
+5. [Hash Layers](#hash-layers-for-large-sparse-models)
+6. [Mamba](#mamba-linear-time-sequence-modeling)
+7. [Linear State-Space Layers](#linear-state-space-layers)
+8. [HiPPo Recurrent Memory](#hippo-recurrent-memory)
 
+## MoE
 ### Outrageously Large Neural Networks
 The Sparsely-Gated Mixture-of-Experts Layer
-Link: https://arxiv.org/abs/1701.06538
+[Link](https://arxiv.org/abs/1701.06538)
 
 #### Summary
 
@@ -23,10 +32,10 @@ $$ y = \sum_{i=1}^{n} G(x)_{i} E_{i}(x) $$
 
 Different types of gating:
 
-- Softwax: $G_{\sigma}(x) = Softmax(x \cdot W_{g})$ ($W_{g}$ is a trainable weight matrix)
-- Noisy Top-K: Adding a tunabe Gaussian noise matrix to only keep the top k values and set the rest to $- \infty$ st:
-$$
-G(x) = Softmax(KeepTopK(H(x), k)) \\
+- **Softwax**: $G_{\sigma}(x) = Softmax(x \cdot W_{g})$ ($W_{g}$ is a trainable weight matrix)
+
+- **Noisy Top-K**: Adding a tunabe Gaussian noise matrix to only keep the top k values and set the rest to $- \infty$ st:
+$$ G(x) = Softmax(KeepTopK(H(x), k)) \\
 H(x)_{i}=(x\cdot W_{g})_{i} + StdNormal() \cdot Softplus((x \cdot W_{noise})_{i}) \\
 KeepTopK(v, k)_{i} = \begin{cases}
   v_{i}, & \text{if $v_{i}$ is in the top k elements of v}, \\
@@ -35,16 +44,14 @@ KeepTopK(v, k)_{i} = \begin{cases}
 $$
 
 ##### Balancing Expert Utilization
-
 Using an importance matrix tied to the gated matrix weights to not oversaturate expert
 
-Dataset:
-
+##### Dataset:
 One Billion Word Benchmark
 
-#### Switch Transformers
+### Switch Transformers
 Scaling to Trillion Parameter Models with Simple and Efficient Sparsity
-link: https://arxiv.org/abs/2101.03961
+[Link](https://arxiv.org/abs/2101.03961)
 
 Simplify routing. Switch transformer encoder block replaces FFN layer
 
@@ -62,7 +69,7 @@ C4 (~7TB): https://www.tensorflow.org/datasets/catalog/c4
 
 ### ST-MoE
 DESIGNING STABLE AND TRANSFERABLE SPARSE  EXPERT MODELS
-link: https://arxiv.org/abs/2202.08906
+[Link](https://arxiv.org/abs/2202.08906)
 
 #### Summary
 
@@ -87,9 +94,10 @@ which tokens should be dropped instead of left-to-right ordering.
 Works by looking at all N tokens getting sent to Expert $i$ and then only routing the $M$
 ones with the highest probabilities from the router.
 
+### Towards an empirical understanding of MoE
 ### Hash Layers For Large Sparse Models
 
-link: https://arxiv.org/abs/2106.04426
+[Link](https://arxiv.org/abs/2106.04426)
 
 Investigating if non-parametric models can approach learned models
 
@@ -162,3 +170,106 @@ Pushshift.io Reddit
 RoBERTa+cc100en Data
 Wikitext-103
 Downstream BST tasks
+
+## Mamba
+
+### Mamba: Linear Time Sequence Modeling
+[Link](https://arxiv.org/abs/2312.00752)
+Improvements:
+- Letting SSM paramenters be functions of the input addresses their weakness
+with discrete modalities, this permits the model to selectively propagate or forget info
+along the sequence length dim depending on the current token. 
+- The change prevents the use of efficient convolutions, we design a hardware-aware
+parallel algorithm in recurrent mode.
+
+### Linear State-Space Layers:
+[Link](https://arxiv.org/abs/2110.13985)
+
+![LSSLOverview](assets/LSSL-Overview.png)
+**Linear State-Space Layer (LSSL)**:
+
+Is a simple sequence model that maps a 1-dim function or sequence $u(t) \to y(t)$
+through an implicit state $x(t)$ by simulating a linear continuous-time state-space
+representation in discrete-time
+$$\dot x(t) = Ax(t) + B(t) \qquad (1) \\ y(t) = Cx(t) + Du(t) \qquad (2)$$
+where $A$ controls the evolutions of the system and $B,C,D$ are projection parameters.
+
+#### Properties:
+
+- LSSLs can be a **linear recurrence** if we specify a step-size $Delta t$ and by applying
+a [discretization](#discretization).
+This has many perks such as being able to be simulated during inference as a recurrent
+model with constant memory and computation per time step.
+- LSSLs can be represented by a continous convolution as stated by the [discretization](#discretization). Which in it's 
+discrete-time version can **parallelized**.
+- LSSLs are differential equations.Thus have a **continuous-time** interpretation.
+
+#### Tradeoffs and solution:
+
+1. They inherit the limitations of both RNNs and CNNS on long sequences
+2. The choice of A and $Delta t$ is crucial for the model to work well. 
+
+These issues are addressed by chosing A from a class of structured matrices that generalize
+prior work on continuous-time memory and mathematically capture long dependencies
+with respect to a learnable family of measures. More info on [HiPPo Recurrent Memory](#hippo-recurrent-memory)
+and [Continuous-Time Memory](#continuous-time-memory)
+
+#### Discretization
+
+Using the **generalized bilinear transform (GBT)** specialized in linear ODEs of shape (1)
+$$ x(t + \Delta t) = (I - \alpha \Delta t \cdot A)^{-1} (I + (1 − \alpha) \Delta t \cdot A)x(t) + \Delta t(I − \alpha \Delta t \cdot A)^{−1} B \cdot u(t)) \qquad (3)$$
+Cases: 
+1. $\alpha = 0$  GBT becomes a classic *Euler method* 
+2. $\alpha = 1$  GBT becomes a *backward Euler method*
+3. $\alpha = \frac{1}{2}$ GBT becomes a *bilinear method* which preserves stability
+
+For $\alpha = \frac{1}{2}$ we can define $\bar A$ and $\bar B$ to be the matrices on (3)
+
+Such that the **discrete-time** state-space model becomes
+$$x_t = \bar{A}x_t + \bar{B}u_t \qquad (4) \\ y_t = Cx_t + Du_t \qquad (5)$$
+
+#### Continuous-Time Memory
+For more information on HiPPo go to my summary of the paper [HiPPo](#hippo-recurrent-memory)
+
+For an input function $u(t)$, a fixed probability measure $w(t)$, and a sequence of $N$ basis
+functions such as polynomials. At every time t, we can project the history of $u$ onto this basis
+yielding a vector of coefficients $x(t) \in {\R}^N$. This mapping can be done using the
+**High-Order Polynomial Projection Operator (HiPPO)**.
+In special cases such as the uniform measure $w = I\{[0, 1]\}$ and the
+exponentially-decaying measure $w(t) = exp(−t)$ [HiPPo](#hippo-recurrent-memory) showed that $x(t)$ satisfies a differential equation
+(1) and derived closed forms for the matrix A.
+
+#### Views of LSSLs
+Given a fixed state space representation A,B,C, and D
+1. Continuous-Time:
+$$\dot x(t) = Ax(t) + B(t) \qquad (1) \\ y(t) = Cx(t) + Du(t) \qquad (2)$$
+2. Recurrence:
+The recurrent state $x_{t-1} \in {\R}^{H X N}$ carries the context of all inputs before $t$. <br>
+Thus the output $y_t$ and current state $x_t$ are computed using: 
+$$x_t = \bar{A}x_t + \bar{B}u_t \qquad (4) \\ y_t = Cx_t + Du_t \qquad (5)$$
+
+3. Convolution: Let initial state $x_{-1} = 0$ then (4) + (5) yields
+$$y_k = C{(\bar A)}^k \bar B u_0 + C{(\bar A)}_{k-1}\bar B u_1 + \dots + C{(\bar AB)}u_{k-1} + \bar B u_k + D u_k \qquad (6)$$
+Then $y$ is simply the (non-circular) convolution $y = K_L(A,B,C) * u + Du$, where
+$$K_L(A,B,C) = (C A^i B)_{i \in [L]} \in \R^L = (CB, CAB,\dots, CA^{L-1}B) \qquad (7)$$
+The entire output $y \in \R^{HxL} can be computed at once by a convolution, which can be efficiently implemented with three FFTs.
+
+### HiPPO Recurrent Memory
+[Link](https://arxiv.org/abs/2008.07669)
+
+RNN have a hard time capturing long-term dependencies resulting in vanishing gradients.
+This has been addressed in Legendre Memory Units (LMU) and Fourier Recurrent Units. But 
+these solutions still still lack theoretical guarantees on gradient bounds.
+
+HiPPO tries to able to address dependencies of arbitrary length **without** priors on the timescale.
+
+Using **orthogonal polynomials** a natural basis emerges which you can update with an optimal
+polynomial approximation as the input sequence is being revealed through time.
+
+
+### Orthogonal Polynomials
+[Link](https://arxiv.org/pdf/1303.2825.pdf)
+
+
+
+
