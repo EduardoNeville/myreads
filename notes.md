@@ -13,7 +13,7 @@ What have I been reading up until now? 2024-04-01
 ## MoE
 ### Outrageously Large Neural Networks
 The Sparsely-Gated Mixture-of-Experts Layer
-[Link](https://arxiv.org/abs/1701.06538)
+[Link to pdf](https://arxiv.org/abs/1701.06538)
 
 #### Summary
 
@@ -51,7 +51,7 @@ One Billion Word Benchmark
 
 ### Switch Transformers
 Scaling to Trillion Parameter Models with Simple and Efficient Sparsity
-[Link](https://arxiv.org/abs/2101.03961)
+[Link to pdf](https://arxiv.org/abs/2101.03961)
 
 Simplify routing. Switch transformer encoder block replaces FFN layer
 
@@ -69,7 +69,7 @@ C4 (~7TB): https://www.tensorflow.org/datasets/catalog/c4
 
 ### ST-MoE
 DESIGNING STABLE AND TRANSFERABLE SPARSE  EXPERT MODELS
-[Link](https://arxiv.org/abs/2202.08906)
+[Link to pdf](https://arxiv.org/abs/2202.08906)
 
 #### Summary
 
@@ -95,9 +95,11 @@ Works by looking at all N tokens getting sent to Expert $i$ and then only routin
 ones with the highest probabilities from the router.
 
 ### Towards an empirical understanding of MoE
+
+
 ### Hash Layers For Large Sparse Models
 
-[Link](https://arxiv.org/abs/2106.04426)
+[Link to pdf](https://arxiv.org/abs/2106.04426)
 
 Investigating if non-parametric models can approach learned models
 
@@ -174,19 +176,24 @@ Downstream BST tasks
 ## Mamba
 
 ### Mamba: Linear Time Sequence Modeling
-[Link](https://arxiv.org/abs/2312.00752)
+[Link to pdf](https://arxiv.org/abs/2312.00752)
 
 Improvements:
 - Letting SSM paramenters be functions of the input addresses their 
 weakness with discrete modalities, this permits the model to 
 selectively propagate or forget info along the sequence length 
 dim depending on the current token. 
-- The change prevents the use of efficient convolutions, we design
-a hardware-aware parallel algorithm in recurrent mode.
+The ability to efficiently select data in an input-dependent manner
+(i.e. focus on or ignore particular inputs)
 
+- Prior SSM models were time- and input- invariant in order to be
+computationally efficient. We overcome this with a hardware-aware 
+algorithm that computes the model recurrently with a scan instead 
+of convolution, but does not materialize the expanded state in order 
+to avoid IO access between different levels of the GPU memory hierarchy.
 
 ### Linear State-Space Layers:
-[Link](https://arxiv.org/abs/2110.13985)
+[Link to pdf](https://arxiv.org/abs/2110.13985)
 
 ![LSSLOverview](assets/LSSL-Overview.png)
 **Linear State-Space Layer (LSSL)**:
@@ -283,7 +290,7 @@ First of all, it is known that quasiseparable matrices have efficient (linear-ti
 The fast Krylov algorithm is sophisticated and was not implemented in the first version of this work. A follow-up to this paper found that it is not numerically stable and thus not usable on hardware. Thus the algorithmic contributions serves the purpose of a proof-of-concept that fast algorithms for the LSSL do exist in other computation models (i.e., arithmetic operations instead of floating point operations), and leave an open question as to whether fast, numerically stable, and practical algorithms for the LSSL exist. 
 
 ### HiPPO Recurrent Memory
-[Link](https://arxiv.org/abs/2008.07669)
+[Link to pdf](https://arxiv.org/abs/2008.07669)
 
 RNN have a hard time capturing long-term dependencies resulting in vanishing gradients.
 This has been addressed in Legendre Memory Units (LMU) and Fourier Recurrent Units. But 
@@ -369,9 +376,77 @@ As for any scalar $\alpha>0$, if $h(t)=f(\alpha t)$, then $hippo(h)(t)=hippo(f)(
 ![HiPPO-LegS-MissingVals](assets/HiPPO-LegS-MissingVals.png)
 ![HiPPO-LegS-Speed](assets/HiPPO-LegS-Speed.png)
 
+### Legendre Memory Units
+[Link to pdf](http://papers.nips.cc/paper/9689-legendre-memory-units-continuous-time-representation-in-recurrent-neural-networks)
+
+The paper aims to replicate the Neurological findings of Delay Network which observes how
+the brain transmits spikes of information through synaptic connections to then filter them
+and keep the signal going.
+
+##### Delay Networks
+
+Works on a mechanism of approximating the ideal delay line by converting it into a finite
+set of ODE's integrated over time.
+
+#### Memory Cell Dynamics
+
+Orthogonalizes the continuous-time history of the input signal $u(t) \in \R$, across a
+sliding window $\theta \in \R_{>0}$ The cell is derived from the linear transfer function 
+for a continuous-time delay, $F(s)=e^{-s\theta}$, which is best-approximated by $d$ 
+coupled ordinary differential equations (ODEs): 
+$$ \theta \dot m(t) = Am(t) + Bu(t) \qquad (1) $$
+where $m(t) \in \R^d$ is a state-vector with $d$ dimensions. The ideal state-space matrices,
+$(A,B)$ are: 
+
+![LMU State-Space Matrices](assets/Legendre-State-Space-Matrices.png)
+
+Importantly $m$ represents a sliding window of $u$ via the **Legendre polynomials** of up
+to degree $d-1$.
+
+$$
+u(t - \theta ') \approx 
+\sum_{i=0}^{d-1} P_i(\frac{\theta '}{\theta})m_i(t) ,
+\quad 0 \leq \theta ' \leq \theta
+\\
+P_i(r) = (-1)^i \sum_{j=0}^{i} \binom{i}{j} \binom{i+j}{j} r^j \qquad (3)
+$$
+
+where $P_i$ is the **shifted** $i$-th Legendre polynomial.
+
+**Important take away!** This decomposition allows $m$ to correspond to
+computations across windows of length $\theta$ projected onto the $d$ 
+orthogonal basis functions.
+
+#### Discretization of LMU
+
+We map these equations onto the memory of a recurrent neural network, $m(t) \in \R_d$, given some input $u(t) \in \R$, indexed at discrete moments in time, 
+$t \in \N:$
+$$
+m(t) = \bar Am(t−1) + \bar Bu(t) \qquad (4)
+$$
+where $(\bar A, \bar B)$ are the discretized matrices provided by the ODE solver for some time-step $\Delta t$ relative to the window length $\theta$
+
+**Error approximation** 
+
+As $d$ increases so does it's memory capacity relative to frequency content. In particular, the approximation error in equation 3 scales as $O(\theta w/d)$, where $w$ is the frequency of the input $u$ that is to be committed to memory
+
+![LMU-Layer](assets/LMU-Layer.png)
+
+For input vector $x_t$, hidden state $h_t$, and memory state $m_t$
+$$ u_t = {e_x}^T x_t + {e_h}^T h_{t-1} + {e_m}^T m_{t-1} \qquad (5)$$
+where $e_x, e_h, e_m$ are learned encoding vectors. Intuitively, the 
+kernels ($W$) learn to compute nonlinear functions across the memory,
+while the encoders ($e$) learn to project the **relevant information** 
+into the memory. The parameters of the memory $(\bar A,\bar B¯, \theta)$
+may be trained to adapt their time-scales by backpropagating through the 
+ODE solver, although we do not require this in our experiments.
+
+#### LMU Results
+
+![LMU-Results](assets/LMU-psMNIST-Results.png)
+
+
 ### Orthogonal Polynomials
-[Link](https://arxiv.org/pdf/1303.2825.pdf)
-
-
+[Link to pdf](https://arxiv.org/pdf/1303.2825.pdf)
 
 
