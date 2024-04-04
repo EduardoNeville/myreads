@@ -9,6 +9,7 @@ What have I been reading up until now? 2024-04-01
 6. [Mamba](#mamba-linear-time-sequence-modeling)
 7. [Linear State-Space Layers](#linear-state-space-layers)
 8. [HiPPo Recurrent Memory](#hippo-recurrent-memory)
+9. [Legendre Memory Units](#legendre-memory-units)
 
 ## MoE
 ### Outrageously Large Neural Networks
