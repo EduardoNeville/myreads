@@ -175,12 +175,15 @@ Downstream BST tasks
 
 ### Mamba: Linear Time Sequence Modeling
 [Link](https://arxiv.org/abs/2312.00752)
+
 Improvements:
-- Letting SSM paramenters be functions of the input addresses their weakness
-with discrete modalities, this permits the model to selectively propagate or forget info
-along the sequence length dim depending on the current token. 
-- The change prevents the use of efficient convolutions, we design a hardware-aware
-parallel algorithm in recurrent mode.
+- Letting SSM paramenters be functions of the input addresses their 
+weakness with discrete modalities, this permits the model to 
+selectively propagate or forget info along the sequence length 
+dim depending on the current token. 
+- The change prevents the use of efficient convolutions, we design
+a hardware-aware parallel algorithm in recurrent mode.
+
 
 ### Linear State-Space Layers:
 [Link](https://arxiv.org/abs/2110.13985)
@@ -196,18 +199,21 @@ where $A$ controls the evolutions of the system and $B,C,D$ are projection param
 
 #### Properties:
 
-- LSSLs can be a **linear recurrence** if we specify a step-size $Delta t$ and by applying
+- LSSLs can be a **linear recurrence** if we specify a step-size $\Delta t$ and by applying
 a [discretization](#discretization).
 This has many perks such as being able to be simulated during inference as a recurrent
 model with constant memory and computation per time step.
-- LSSLs can be represented by a continous convolution as stated by the [discretization](#discretization). Which in it's 
-discrete-time version can **parallelized**.
-- LSSLs are differential equations.Thus have a **continuous-time** interpretation.
+- LSSLs can be represented by a continous convolution as stated by the [discretization](#discretization). Which in it's discrete-time version 
+can be **parallelized**.
+- LSSLs are differential equations. Thus have a **continuous-time** interpretation.
 
 #### Tradeoffs and solution:
 
+**Issues** 
 1. They inherit the limitations of both RNNs and CNNS on long sequences
 2. The choice of A and $Delta t$ is crucial for the model to work well. 
+
+**Solutions** 
 
 These issues are addressed by chosing A from a class of structured matrices that generalize
 prior work on continuous-time memory and mathematically capture long dependencies
@@ -217,7 +223,10 @@ and [Continuous-Time Memory](#continuous-time-memory)
 #### Discretization
 
 Using the **generalized bilinear transform (GBT)** specialized in linear ODEs of shape (1)
-$$ x(t + \Delta t) = (I - \alpha \Delta t \cdot A)^{-1} (I + (1 − \alpha) \Delta t \cdot A)x(t) + \Delta t(I − \alpha \Delta t \cdot A)^{−1} B \cdot u(t)) \qquad (3)$$
+$$
+x(t + \Delta t) \\
+= (I - \alpha \Delta t \cdot A)^{-1} (I + (1 − \alpha) \Delta t \cdot A)x(t) \qquad (3)\\ 
++ \Delta t(I − \alpha \Delta t \cdot A)^{−1} B \cdot u(t)) $$
 Cases: 
 1. $\alpha = 0$  GBT becomes a classic *Euler method* 
 2. $\alpha = 1$  GBT becomes a *backward Euler method*
@@ -226,7 +235,7 @@ Cases:
 For $\alpha = \frac{1}{2}$ we can define $\bar A$ and $\bar B$ to be the matrices on (3)
 
 Such that the **discrete-time** state-space model becomes
-$$x_t = \bar{A}x_t + \bar{B}u_t \qquad (4) \\ y_t = Cx_t + Du_t \qquad (5)$$
+$$x_t = \bar{A}x_{t-1} + \bar{B}u_t \qquad (4) \\ y_t = Cx_t + Du_t \qquad (5)$$
 
 #### Continuous-Time Memory
 For more information on HiPPo go to my summary of the paper [HiPPo](#hippo-recurrent-memory)
@@ -238,6 +247,7 @@ yielding a vector of coefficients $x(t) \in {\R}^N$. This mapping can be done us
 In special cases such as the uniform measure $w = I\{[0, 1]\}$ and the
 exponentially-decaying measure $w(t) = exp(−t)$ [HiPPo](#hippo-recurrent-memory) showed that $x(t)$ satisfies a differential equation
 (1) and derived closed forms for the matrix A.
+The definition can be found [here](#hippo-abstraction)
 
 #### Views of LSSLs
 Given a fixed state space representation A,B,C, and D
@@ -254,6 +264,24 @@ Then $y$ is simply the (non-circular) convolution $y = K_L(A,B,C) * u + Du$, whe
 $$K_L(A,B,C) = (C A^i B)_{i \in [L]} \in \R^L = (CB, CAB,\dots, CA^{L-1}B) \qquad (7)$$
 The entire output $y \in \R^{HxL} can be computed at once by a convolution, which can be efficiently implemented with three FFTs.
 
+##### Computational Bottlenecks
+
+1. Recurrence view is a **matrix-vector-multiplication (MVM)** of the discretized $\bar A$
+2. Convolutional view is computing a Krylov function $K_L$
+
+For both views, learning the parameters $\bar A$ and $\Delta t$ 
+requires recomputing a MVM and a Krylov function for $\bar A$ over and over. Which is computationally inefficient.
+
+Corollary 4.1. For $w$ corresponding to the classical OPs, hippo($w$) is 3-quasiseparable.
+
+They show that the same restriction of $A$ to the class of quasiseparable (Corollary 4.1), which gives an LSSL the ability to theoretically remember long dependencies, simultaneously grants it computational efficiency. 
+
+First of all, it is known that quasiseparable matrices have efficient (linear-time) MVM. We show that they also have fast Krylov functions, allowing efficient training with convolutions. 
+
+##### Limitations
+
+The fast Krylov algorithm is sophisticated and was not implemented in the first version of this work. A follow-up to this paper found that it is not numerically stable and thus not usable on hardware. Thus the algorithmic contributions serves the purpose of a proof-of-concept that fast algorithms for the LSSL do exist in other computation models (i.e., arithmetic operations instead of floating point operations), and leave an open question as to whether fast, numerically stable, and practical algorithms for the LSSL exist. 
+
 ### HiPPO Recurrent Memory
 [Link](https://arxiv.org/abs/2008.07669)
 
@@ -266,6 +294,80 @@ HiPPO tries to able to address dependencies of arbitrary length **without** prio
 Using **orthogonal polynomials** a natural basis emerges which you can update with an optimal
 polynomial approximation as the input sequence is being revealed through time.
 
+#### General approach
+
+Let $f(x) \in \R \text{ on } t \geq 0$ be the input function. We will project the space of functions 
+that form the cumulative history $f_{\leq t}:= f(x) |_{x \leq t}$ at every time $t \geq 0$ for every
+time $t$. We project this space of functions onto a subspace of bounded dimensions. This compressed version
+becomes the representation of the history of the input at time $t$.
+
+We now need:
+1. Properly quantify the approximations onto the subspace.
+2. Finding a suitable subspace.
+
+#### Function Approximation 
+
+For a given function $f(x)$ and a probability measure $\mu \text{ on } [0, \infty )$, any space of square
+integrable functions with inner product $\langle f, g \rangle_{\mu} = \int_{0}^{\infty} f(x)g(x) d\mu(x)$ is a Hilbert space.
+
+Any $N$-dim subspace of this function space is suitable for approximations.
+
+Let $G$ be such space we seek some $g^{(t)} \in G$ that minimizes $\|f_{\leq t} - g^{(t)}\|_{\mu^{(t)}}$
+
+Here, $\mu^{(t)}$ is the measure that controls the importance of the parts in the inputs domain.
+
+This approximation is represented by $N$ coeffs of its expansion in any basis of $G$.
+
+#### HiPPO abstraction
+
+Given a time-varying measure family $\mu^{(t)} \text{ on } ( - \infty, t]$, and $N$-dim subspace $G$ of polynomials and a function $f: \R_{\leq 0} \to \R$, we have that $proj_t \text{ and } coef_t$ define HiPPO to:
+1. Project $f$ onto a polynomial $g^{(t)} \in G$ that minimizes the approximation error $\|f_{\leq t} - g^{(t)}\|_{\mu^{(t)}}$
+2. We then compute the coefficients with the following mapping: $coef_t : G \to \R^N$ such that $coef_t(g^{(t)}) = c(t) \in \R^N$  
+
+Thus $hippo(f)(t) = coef_t(proj_t(f))$ is the HiPPO abstraction of $f$ at time $t$. We also find that $c(t) = coef_t(proj_t(f))$
+has the form of an ODE such that 
+$$\frac{d}{dt} c(t) = A(t)c(t) + B(t)f(t)$$
+for some matrices $A(t) \in \R^{N \times N} \text{ and } B(t) \in \R^{N \times 1}$
+
+Discretizing this ODE we get a linear recurrence relation 
+$$c_{t+1} = A_t c_t + B_t f_t$$
+
+![HiPPO](assets/HiPPO.png)
+
+#### HiPPO recurrence: Continuous to Discrete Time with ODE discretization
+
+The basic discretization as shown in the [LSSL](#discretization) paper. Is very dependent on the step size $\Delta t$
+hyperparameter as it is incharge of performing the discrete update. The note that this 
+is the reasons why this method is able to seamlessly handle timestamped data even with
+missing values. Serving as a tool to outperform against typos and other human errors that
+could appear in training data. 
+
+#### HiPPO-LegS: Scaled measures for Timescale robustness
+
+Scaled Legendre measures (LegS) assign uniform weights to all history $[0,t]: \mu_{(t) = frac{1}{t}\I_{[0,t]}}$
+
+Giving us the following continuous and discrete time dynamics:
+
+$$\frac{d}{dt} c(t) = - \frac{1}{t} Ac(t) + \frac{1}{t}Bf(t) \qquad (3)$$
+$$c_{t+1} = (1 + \frac{A}{t} c_t) + \frac{1}{t} B f_t \qquad (4)$$
+$$
+A_{nt} = \begin{cases}
+  (2n+1)^{\frac{1}{2}} (2t+1)^{\frac{1}{2}}, & \text{if } n \geq t , \\
+  n + 1 & \text{if } n = k,  \qquad B_n = (2n + 1)^{\frac{1}{2}} \\
+  0 & \text{if } n \leq t 
+\end{cases}
+$$
+
+##### Advantages:
+1. **Timescale robustness:** HiPPO-LegS doesn't take a timescale parameter and dialating the input $f$ doesn't change the approximation coefficients. 
+As for any scalar $\alpha>0$, if $h(t)=f(\alpha t)$, then $hippo(h)(t)=hippo(f)(\alpha t)$. In other words, if $\gamma  :t\to \alpha t$ is any dilation function, then $hippo(f \odot \gamma)=hippo(f) \odot \gamma$
+2. **Computational efficiency:** The main operation is matrix multiplication on discretized square matrix $A$ generally done in $O(n^2)$ can be done with fast multiplication algorithms (discretization can be done using [GBT](#discretization))
+3. **Gradient flow:** Removes vanishing gradient problem
+4. **Approximation error bound:**  The error rate of LegS decreases with the smoothness of the input. 
+
+![HiPPO-LegS-RNN](assets/HiPPO-LegS-RNN.png)
+![HiPPO-LegS-MissingVals](assets/HiPPO-LegS-MissingVals.png)
+![HiPPO-LegS-Speed](assets/HiPPO-LegS-Speed.png)
 
 ### Orthogonal Polynomials
 [Link](https://arxiv.org/pdf/1303.2825.pdf)
