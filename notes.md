@@ -96,7 +96,18 @@ Works by looking at all N tokens getting sent to Expert $i$ and then only routin
 ones with the highest probabilities from the router.
 
 ### Towards an empirical understanding of MoE
+[Link to pdf](https://arxiv.org/html/2402.13089v1)
+#### Set ups
 
+1. [Top-K](#outrageously-large-neural-networks) or [Top-1](#switch-transformers) routing
+2. [Expert Specialization](#st-moe) what do each expert specialize on? Found mostly syntactic
+specialization.
+
+#### Experiments
+
+![EmpiricalMoE-Results](assets/EmpiricalMoE-Results.png)
+
+##### 
 
 ### Hash Layers For Large Sparse Models
 

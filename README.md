@@ -5,7 +5,7 @@ The notes.md are my notes on the papers I've read.
 
 ## Links to the papers
 
-- [MoE-Mamba](https://arxiv.org/pdf/2401.04081.pdf)]
+- [MoE-Mamba](https://arxiv.org/pdf/2401.04081.pdf)
 
 ## MoE (Mixture of Experts) Papers
 
