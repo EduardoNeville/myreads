@@ -1,7 +1,8 @@
-# My Reads
+# MoE-Mamba Papers and Notes
 
-The notes.md are my notes on the papers I've read.
+![MoE-Mamba](assets/MoEMamba.png)
 
+Find my notes in the [markdown](notes.md) filer
 
 ## Links to the papers
 
