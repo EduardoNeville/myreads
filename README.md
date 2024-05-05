@@ -2,7 +2,7 @@
 
 ![MoE-Mamba](assets/MoEMamba.png)
 
-Find my notes in the [markdown](notes.md) filer
+Find my notes in the [markdown](notes.md) file
 
 ## Links to the papers
 
