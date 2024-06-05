@@ -1,7 +1,8 @@
 # Notes
 
-What have I been reading up until now? 2024-04-01
+What have I been reading up until now? 2024-05-09
 
+## Table of Contents
 ##### [Mixture-of-Experts](#moe)
 - [Outrageously Large Neural Networks](#outrageously-large-neural-networks)
 - [Switch Transformers](#switch-transformers)
@@ -20,10 +21,19 @@ What have I been reading up until now? 2024-04-01
 
 - [ByT5](#byt5)
 - [Tokenizer Choices](#tokenizer-choices-for-llm-training)
+- [SaGE](#sage---incorporating-context-into-subword-vocabularies)
+- [CANINE]()
+
+##### [Compression](#compression)
+
+- [Lossless Unicode Tamil Documents compression](#lossless-text-compression-for-unicode-tamil-documents)
+- [Arabic Text Lossless Compression](#arabic-text-lossless-compression-by-characters-encoding)
+- [Unishox](#unishox---a-hybrid-encoder-for-short-unicode-strings)
 
 ##### [Benchmarks](#benchmarks)
 
 - [GSM-Plus](#gsm-plus)
+
 
 ## MoE
 ### Outrageously Large Neural Networks
@@ -521,7 +531,79 @@ ortho-normal basis for the space of polynomials on $[-1,1]$
 
 Tokenization on a byte level is performed by splitting the utf-8 encoding into one token per byte.
 
+Notable tradeoffs between character and subword encoding include, parameter counts, training FLOPs, and 
+inference speed. 
 
+We have that the large vocabularies of word- or subword models often result in many parameters being devoted 
+to the vocabulary matrix. In contrast, byte-level model by definition only requires 256 embeddings. This helps
+mitigate the word representations from sparse vocabulary matrices, into dense network layers should allow the 
+model to generalize more efficiently.
+
+They also note that models with fixed vocabulary can complicate adaption to new languages and new terminolgy 
+whereas by definition token-free models can process any text sequence.
+
+##### Design of ByT5
+
+They differ from previous work in that they (1) Train encoder-decoder models that extend to generative task, (2)
+Their models work directly with UTF-8 bytes, (3) They explore the effect of model scale, training beyond 10b params
+
+**Differences with mT5** 
+1. Feed UTF-8 bytes straight into the model
+2. Modify the "span corruption" pre-training objective. This task refers to a span of tokens in unlabeled data are replaced
+with a single "sentinel" ID and the model must fill in the missing span. In their case, they found that it was sufficient
+to resue the final 100 byte IDs. **Note:** While mT5 usesan average span of 3 subwords they decided to use a lenght of 20 bytes. 
+3. The found best results in a "heavy" encoder in which the encoder was 3 times deeper that the decoder.
+
+They adjust the ByT5 model hidden size ($d_{model}$) and feed-forward dimensionality ($d_{ff}$) to be parameter matched with mT5.
+Due to the reduction in total parameter count. This is done following the Scaling LLM paper
+
+**Note:** Mapping the input token to its corresponding vector representation in the vocabulary matrix is essentially "free" 
+in terms of FLOPs since it can be implemented by addressing a particular row in memory. 
+
+Byte-level models trained on the same number of tokens as a word or subword-level model will have been trained on less text data.
+
+**Compression Rate:** In comparison to the mT5 SentecePiece tokenization, they measured the compression rate of UTF-8 bytes to 
+tokens in each language split of the mC4 corpus used in pre-training. While the ratio ranges from 2.5 in Maltese to 9.0 in Khmer.
+As a whole, the overall compression rate is 4.1 bytes per SentecePiece token. This is a x4 increase to the sequence length which 
+they see as a benefit as the model get more compute to spend encoding a given piece of text.
+
+but given a fixed input sequence length, and number of training steps, the model will be exposed to roughly x4 less actual text during
+pre-training.
+
+###### What measures they use?
+1. Parameter count: an simple and easy-to-measure quantity that directly relates to the amount of memory required to use a model. 
+2. Inference Time: real world measure of models computational cost 
+3. Pre-training efficiency:
+
+Using the benchmarks: GLUE, SuperGLUE, GEM-XSum, XNLI, TweetQA, DROP, and a decreased Dakshina task.
+
+###### Results
+
+Better performance in smaller models (up to 1B parameters) for GLUE and SuperGLUE 
+Perhaps due to lock up in vocabulary related matrices for mT5.
+
+For GEM-XSum, TweetQA, and DROP ByT5 outperforms in all model sizes. 
+Getting close to best model in GEM-XSum (15.3 vs 17.0)
+
+For XNLI tasks:
+ByT5 outperforms in smaller model sizes but achieves mixed results in large models (above 1B params)
+
+For Dakshina and SIGMORPHON 2000
+ByT5 outperforms in all classes.
+
+**Synthetic Noise:** 
+They used multiple noising schemes on the XNLI benchmark and outperformed in all schemes.
+Such as DROP ( dropping a character), Repetition, Antspeak (each character is capitalized and padded with spaces), Uppercase
+(just upper case), Random Case (random variation of upper and lower case).
+
+In the encoder/ decoder balance they find that a "heavy decoder" out performs other balances. 
+
+**Speed comparison:** ByT5 requires ~1.2x more operations, resulting in ~0.75x as many sequences per second.
+On longer input sequences like GEM-XSum the slowdown is more pronounced.
+
+When holding batch size constant at a fixed number of tokens, they show that ByT5 typically takes more fine-tunning steps than
+mT5 to reach optimal performance. For tasks that favour byte-level representations, ByT5 achieves peak performance in 2.5x less 
+steps (eg. Dakshina)
 
 ### Tokenizer Choices for LLM Training 
 
@@ -539,7 +621,7 @@ Downstream evaluations like ARC-Easy, HellaSwag and others were used to compare 
 
 #### Findings
 
-SentecePiece BPE and HuggingFace BPE have differnt tokenization encoding schemes. 
+SentecePiece BPE and HuggingFace BPE have different tokenization encoding schemes. 
 
 Low overlap between HF BPE and SP BPE might be due to different configurations and pre-processing steps.
 
@@ -556,6 +638,89 @@ Best performing tokenizer on average accross all tasks had a vocabulary size of 
 Lower fertility scores and, therefore, smaller vocabularies lead to faster training and inference times.
 Increasing the vocabulary size from 50k to larger vocabulary sizers increases the computational costs in all cases.
 Indicating lower fertility of larger vocabularies doesn't compensate for larger vocabulary size computational cost.
+
+### SaGE - Incorporating Context into Subword Vocabularies
+
+[Link to pdf](https://arxiv.org/abs/2210.07095)
+
+### CANINE - Efficient Tokenization-Free Encoder
+
+[Link to pdf](https://arxiv.org/abs/2103.06874)
+
+Canine offers and alternative tokenization method that doens't require tokenization
+
+They offer:
+1. Full character-level loss that autoregresively predicts characters in masked spans.
+2. Vocabulary based los that predicts the identities of masked subword tokens. **Note:** this tokenization
+is only used for pre-training loss. tokens are never input to the encoder, the tokenizer and the vocabulary
+can be discarded after pre-training.
+
+##### How their model works.
+
+![CANINE_neural_architecture](assets/CANINE_Arch.png)
+
+**1. Pre-processing:** Transform UTF-8 chars into their codepoint. 
+
+**2. Character Hash-embeddings:** Using multiple hash functions they encode each character yielding 
+a concatenation of their hash values. 
+![CANINE_LookUP](assets/CANINE_LOOKUP.png)
+They note that while individual hash functions are subject to hash collisions, the overall effect is 
+minimal.
+
+**2.1. Optional:** Use of a vocabulary free n.grams 
+
+Where we redefine the embeddings $e_i$ above to include the n-grams characters
+![CANINE_n-gram](assets/CANINE_n-gram.png)
+
+
+**3. Downsampling:** To make CANINE efficient they use a **single** layer block-wise local attention
+transformer. To perform self attention only within each block of a predefined size. Then use a strided convolution
+to reduce the number of sequence positions to be similar to that of a word piece model.
+
+![CANINE_Downsampling](assets/CANINE_Downsampling.png)
+
+**4. Regular transformer stack**  Here any sequence-to-sequence model can be used.
+
+**5. Upsampling:**
+
+
+## Compression
+
+### Lossless Text Compression For Unicode Tamil Documents
+
+[Link to pdf](https://ictactjournals.in/paper/IJSC_Vol_8_Iss_2_Paper_7_1635_1640.pdf)
+
+#### Summary
+
+In this paper the authors find a clever mapping from Tamil Unicode characters to ASCII encoding.
+
+Basic Tamil has a total of 247 characters available. While some vowels require the basic shape of
+the consonant to be altered in a way that is specific to that vowel. Other characters are written
+by adding vowel specific suffixes to consonants.
+
+Compression of the Tamil texts are done by replacing a single character by ASCII characters. This is
+due to the encoding of UTF-8 where ASCII characters (being the first in the UTF-8 encoding) on take up
+1 byte (256 bits). Where as Tamil range from U+0B80 to U+0BFF, this means in UTF-8 encoding these characters
+take up 2 bytes instead. 
+
+Mapping from Tamil to ASCII therefore allows for a 50 % compression. We note that Tamil characters on text
+are a combination of different Unicode characters. Thus further compression occurs in this process.
+
+The study goes to show results of this compression in detail.
+
+
+### Arabic Text Lossless Compression by Characters Encoding
+
+[Link to pdf](https://www.researchgate.net/publication/335805490_Arabic_Text_Lossless_Compression_by_Characters_Encoding)
+
+#### Summary
+
+In a similar fashion to the previous paper, this study aims to map the Arabic characters to ASCII characters to reduce it's
+Unicode character size.
+
+### Unishox - A hybrid encoder for Short Unicode Strings
+
+[Link to pdf](https://vixra.org/abs/2109.0113)
 
 ## Benchmarks
 
