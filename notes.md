@@ -1,5 +1,5 @@
-# Notes
 
+# Notes
 What have I been reading up until now? 2024-05-09
 
 ## Table of Contents
@@ -51,7 +51,7 @@ This gatting function $G(x)$ selects two experts to perform computations on $x$.
 
 We note that:
 
-$$ y = \sum_{i=1}^{n} G(x)_{i} E_{i}(x) $$
+$$y = \sum_{i=1}^{n} G(x)_{i} E_{i}(x)$$
 
 ##### The Gating Network
 
@@ -60,13 +60,12 @@ Different types of gating:
 - **Softwax**: $G_{\sigma}(x) = Softmax(x \cdot W_{g})$ ($W_{g}$ is a trainable weight matrix)
 
 - **Noisy Top-K**: Adding a tunabe Gaussian noise matrix to only keep the top k values and set the rest to $- \infty$ st:
-$$ G(x) = Softmax(KeepTopK(H(x), k)) \\
+$$G(x) = Softmax(KeepTopK(H(x), k)) \\
 H(x)_{i}=(x\cdot W_{g})_{i} + StdNormal() \cdot Softplus((x \cdot W_{noise})_{i}) \\
 KeepTopK(v, k)_{i} = \begin{cases}
   v_{i}, & \text{if $v_{i}$ is in the top k elements of v}, \\
   - \infty, & \text{otherwise}.
-\end{cases}
-$$
+\end{cases}$$
 
 ##### Balancing Expert Utilization
 Using an importance matrix tied to the gated matrix weights to not oversaturate expert
@@ -150,25 +149,16 @@ Let us first introduce the Mixture-of-Experts setting where we apply our hash-ba
 We use the same setting as where a feedforward network (FFN) in a Transformer is
 replaced by its MoE version. Given a tokenized input sequence ${x_1 , x_2 , . . . , x_T }$ of $T$ tokens, a
 representation for each token is computed in parallel by a standard Transformer
-$$
-h_1 , h_2 , . . . , h_T = TRANSFORMER (x_1 , x_2 , . . . , x_T ).
-$$
+$$h_1 , h_2 , . . . , h_T = TRANSFORMER (x_1 , x_2 , . . . , x_T ).$$
 The Transformer consists of L layers that computes final hidden states for each token, and each layer
 is composed of self-attention and FFN sublayers, where FFNs are two-layer fully connected networks
-$$
-h̄_{l}^{t} = SelfAttn(h_{t}^{l-1}) \\
-h_{l}^{t} = FFN(h̄_{l}^{t})
-$$
+$$h̄_{l}^{t} = SelfAttn(h_{t}^{l-1}) \\
+h_{l}^{t} = FFN(h̄_{l}^{t})$$
 (2)
 Here we omit skip-connections and normalization for brevity. We can then replace one or more of the
 FFN sublayers with expert modules. Replacing the FNN at layer l with K expert FFNs, their output
 is then mixed with some gating function $g(·)$:
-$$
-h_{l}^{t} = FFN(h̄_{l}^{t})
-→
-h_{l}^{t} = \sum_{i=1}^{K} g_i (h_{l}^{t}) FFN_i (h_{l}^{t}),
-t = 1, . . . , T,
-$$
+$$h_{l}^{t} = FFN(h̄_{l}^{t}) → h_{l}^{t} = \sum_{i=1}^{K} g_i (h_{l}^{t}) FFN_i (h_{l}^{t}), t = 1, . . . , T,$$
 
 where importantly each token is routed to a different mixture of experts, as the gating function
 depends on the token’s specific hidden state h̄lt .
@@ -267,10 +257,9 @@ and [Continuous-Time Memory](#continuous-time-memory)
 #### Discretization
 
 Using the **generalized bilinear transform (GBT)** specialized in linear ODEs of shape (1)
-$$
-x(t + \Delta t) \\
+$$x(t + \Delta t) \\
 = (I - \alpha \Delta t \cdot A)^{-1} (I + (1 − \alpha) \Delta t \cdot A)x(t) \qquad (3)\\ 
-+ \Delta t(I − \alpha \Delta t \cdot A)^{−1} B \cdot u(t)) $$
++ \Delta t(I − \alpha \Delta t \cdot A)^{−1} B \cdot u(t))$$
 Cases: 
 1. $\alpha = 0$  GBT becomes a classic *Euler method* 
 2. $\alpha = 1$  GBT becomes a *backward Euler method*
@@ -394,13 +383,10 @@ Giving us the following continuous and discrete time dynamics:
 
 $$\frac{d}{dt} c(t) = - \frac{1}{t} Ac(t) + \frac{1}{t}Bf(t) \qquad (3)$$
 $$c_{t+1} = (1 + \frac{A}{t} c_t) + \frac{1}{t} B f_t \qquad (4)$$
-$$
-A_{nt} = \begin{cases}
-  (2n+1)^{\frac{1}{2}} (2t+1)^{\frac{1}{2}}, & \text{if } n \geq t , \\
+$$A_{nt} = \begin{cases} (2n+1)^{\frac{1}{2}} (2t+1)^{\frac{1}{2}}, & \text{if } n \geq t , \\
   n + 1 & \text{if } n = k,  \qquad B_n = (2n + 1)^{\frac{1}{2}} \\
   0 & \text{if } n \leq t 
-\end{cases}
-$$
+\end{cases}$$
 
 ##### Advantages:
 1. **Timescale robustness:** HiPPO-LegS doesn't take a timescale parameter and dialating the input $f$ doesn't change the approximation coefficients. 
@@ -499,22 +485,24 @@ $p_0 (x) = 1$
 
 To find $p_1 (x) = ?$ we have to find the projection of $x$ onto $p_0$ and subtract it from $x$.
 
-$\hat x = \frac{x \cdot p_0}{p_0 \cdot p_0} \\ = \frac{\int_{-1}^{1} x dx}{\int_{-1}^{1} 1 dx} = 0$
+$$\hat x = \frac{x \cdot p_0}{p_0 \cdot p_0} \\ = \frac{\int_{-1}^{1} x dx}{\int_{-1}^{1} 1 dx} = 0$$
 
-$$ x - \hat x = x $$
+$$x - \hat x = x$$
 
 Thus $p_1 (x) = x$
 
 **Note: if we find x to not be p_0(x)=1 we must normalize it to become 1** 
 To find $p_2 (x) = ?$ we have to find the projection of $x^2$ onto $p_0$ and $p_1$ and subtract it from $x^2$.
 
-$\hat x^2 = (\frac{x^2 \cdot p_0}{p_0 \cdot p_0})(p_0) + (\frac{x^2 \cdot p_1}{p_1 \cdot p_1})p_1 \\ = \frac{\int_{-1}^{1} x^2 dx}{\int_{-1}^{1} 1 dx} + \frac{\int_{-1}^{1} x^3 dx}{\int_{-1}^{1} x^2 dx}x \\ = \frac{\frac{2}{3}}{2} + 0 = \frac{2}{3}$
-$$ x^2 - \hat x^2 = x^2 - \frac{2}{3} $$
+$$\hat x^2 = (\frac{x^2 \cdot p_0}{p_0 \cdot p_0})(p_0) + (\frac{x^2 \cdot p_1}{p_1 \cdot p_1})p_1 \\
+= \frac{\int_{-1}^{1} x^2 dx}{\int_{-1}^{1} 1 dx} + \frac{\int_{-1}^{1} x^3 dx}{\int_{-1}^{1} x^2 dx}x \\
+= \frac{\frac{2}{3}}{2} + 0 = \frac{2}{3}$$
+$$x^2 - \hat x^2 = x^2 - \frac{2}{3}$$
 
-$$ p_2 (x) = c(x^2 - \frac{2}{3}) $$
-$$ p_2 (1) = \frac{2}{3}c = 1 $$
-$$ c = \frac{3}{2} $$
-$$ p_2 (x) = \frac{3}{2}(x^2 - \frac{1}{3}) $$
+$$p_2 (x) = c(x^2 - \frac{2}{3})$$
+$$p_2 (1) = \frac{2}{3}c = 1$$
+$$c = \frac{3}{2}$$
+$$p_2 (x) = \frac{3}{2}(x^2 - \frac{1}{3})$$
 
 We therefore have the first 2 legendre polynomials. Which will be an 
 ortho-normal basis for the space of polynomials on $[-1,1]$
